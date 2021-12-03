@@ -1,4 +1,6 @@
 # RequestID 🔎
+[![CircleCI](https://circleci.com/gh/jamieaitken/requestid/tree/main.svg?style=svg)](https://circleci.com/gh/jamieaitken/requestid/tree/main)
+[![codecov](https://codecov.io/gh/jamieaitken/requestid/branch/main/graph/badge.svg?token=E7EV6JBPLW)](https://codecov.io/gh/jamieaitken/requestid)
 
 This is a very simple piece of middleware for adding request/correlation IDs to the context of a http request.
 
