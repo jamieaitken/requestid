@@ -1,0 +1,64 @@
+version: 2.1
+
+orbs:
+  go: circleci/go@1.6.0
+  codecov: codecov/codecov@3.2.0
+
+jobs:
+  install-dependencies:
+    docker:
+      - image: cimg/go:1.16.11
+    steps:
+      - checkout
+      - go/mod-download
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - go
+            - project
+  run-linter:
+    docker:
+      - image: cimg/go:1.16.11
+    steps:
+      - attach_workspace:
+          at: ~/
+      - run:
+          name: install golangci-lint
+          command: |
+            curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.43.0
+      - run:
+          name: run linter
+          command: |
+            golangci-lint run ./...
+  unit-tests:
+    docker:
+      - image: cimg/go:1.16.11
+    steps:
+      - attach_workspace:
+          at: ~/
+      - go/test:
+          covermode: atomic
+          failfast: true
+          race: true
+          coverprofile: cover-source.txt
+      - codecov/upload:
+          file: cover-source.txt
+workflows:
+  build:
+    jobs:
+      - install-dependencies:
+          filters:
+            tags:
+              only: /^v.*/
+      - run-linter:
+          requires:
+            - install-dependencies
+          filters:
+            tags:
+              only: /^v.*/
+      - unit-tests:
+          requires:
+            - install-dependencies
+          filters:
+            tags:
+              only: /^v.*/
