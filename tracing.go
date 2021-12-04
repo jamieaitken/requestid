@@ -16,12 +16,15 @@ const (
 
 // Tracer provides the ability to add a request id to context.
 type Tracer struct {
-	fn  TracerFunc
-	key Key
+	fn              TracerFunc
+	key             Key
+	idGeneratorFunc IDGeneratorFunc
 }
 
 // TracerFunc is the function signature of a Custom function to be used.
 type TracerFunc func(http.HandlerFunc) http.HandlerFunc
+
+type IDGeneratorFunc func() string
 
 // Option allows for users to define the behaviour of a Tracer.
 type Option func(*Tracer)
@@ -29,29 +32,21 @@ type Option func(*Tracer)
 // New instantiates a Tracer.
 func New(opts ...Option) *Tracer {
 	t := &Tracer{
-		key: DefaultTracingKey,
+		key:             DefaultTracingKey,
+		idGeneratorFunc: generateID,
 	}
 
 	t.fn = t.addRequestID
 
-	for _, opt := range opts {
-		opt(t)
-	}
+	t.Apply(opts...)
 
 	return t
 }
 
-// WithTracerFunc allows for using a custom function instead.
-func WithTracerFunc(tracerFunc TracerFunc) Option {
-	return func(tracer *Tracer) {
-		tracer.fn = tracerFunc
-	}
-}
-
-// WithTracerKey allows for a custom key to be used.
-func WithTracerKey(tracerKey Key) Option {
-	return func(tracer *Tracer) {
-		tracer.key = tracerKey
+// Apply allows for the Tracer to be altered after instantiation.
+func (t *Tracer) Apply(opts ...Option) {
+	for _, opt := range opts {
+		opt(t)
 	}
 }
 
@@ -60,13 +55,17 @@ func (t *Tracer) Trace(next http.HandlerFunc) http.HandlerFunc {
 	return t.fn(next)
 }
 
+func generateID() string {
+	return uuid.New().String()
+}
+
 func (t *Tracer) addRequestID(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		ctx := req.Context()
 
 		_, ok := ctx.Value(t.key).(string)
 		if !ok {
-			ctx = context.WithValue(ctx, t.key, uuid.New().String())
+			ctx = context.WithValue(ctx, t.key, t.idGeneratorFunc())
 		}
 
 		req = req.WithContext(ctx)

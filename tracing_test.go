@@ -16,28 +16,30 @@ func TestNew(t *testing.T) {
 	tests := []struct {
 		name             string
 		givenOpts        []requestid.Option
-		givenURL         string
 		givenHandlerFunc http.HandlerFunc
 		expectedStatus   int
 	}{
 		{
 			name:             "given request, expect default requestid function to be used",
-			givenURL:         "/v1/get",
 			givenHandlerFunc: Get,
 			expectedStatus:   http.StatusOK,
 		},
 		{
 			name:             "given request, expect default requestid function to be used with given key",
 			givenOpts:        []requestid.Option{requestid.WithTracerKey(CustomKey)},
-			givenURL:         "/v2/get",
 			givenHandlerFunc: GetWithGivenKey,
 			expectedStatus:   http.StatusOK,
 		},
 		{
-			name:             "given request and custom func expect custom func to be used",
+			name:             "given request and custom func, expect custom func to be used",
 			givenOpts:        []requestid.Option{requestid.WithTracerFunc(CustomFunc)},
-			givenURL:         "/v3/get",
 			givenHandlerFunc: GetCustom,
+			expectedStatus:   http.StatusOK,
+		},
+		{
+			name:             "given request and custom id generator, expect static-key in context",
+			givenOpts:        []requestid.Option{requestid.WithIDGenerator(staticID)},
+			givenHandlerFunc: GetWithCustomIDGenerator,
 			expectedStatus:   http.StatusOK,
 		},
 	}
@@ -47,12 +49,10 @@ func TestNew(t *testing.T) {
 
 			rr := httptest.NewRecorder()
 
-			req := httptest.NewRequest(http.MethodGet, test.givenURL, nil)
+			req := httptest.NewRequest(http.MethodGet, "/v1/get", nil)
 
 			router := new(mux.Router)
 			router.HandleFunc("/v1/get", tracer.Trace(test.givenHandlerFunc))
-			router.HandleFunc("/v2/get", tracer.Trace(test.givenHandlerFunc))
-			router.HandleFunc("/v3/get", tracer.Trace(test.givenHandlerFunc))
 			router.ServeHTTP(rr, req)
 
 			if !cmp.Equal(rr.Code, test.expectedStatus) {
@@ -82,8 +82,9 @@ func GetWithGivenKey(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-var (
+const (
 	CustomKey requestid.Key = "testKey"
+	StaticKey string        = "static-key"
 )
 
 func CustomFunc(next http.HandlerFunc) http.HandlerFunc {
@@ -109,4 +110,23 @@ func GetCustom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func GetWithCustomIDGenerator(w http.ResponseWriter, r *http.Request) {
+	val, ok := r.Context().Value(requestid.DefaultTracingKey).(string)
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if val != StaticKey {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func staticID() string {
+	return StaticKey
 }
